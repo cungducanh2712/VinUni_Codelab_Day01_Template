@@ -144,36 +144,25 @@ class TestCallAnthropic(unittest.TestCase):
 class TestCompareModels(unittest.TestCase):
 
     def test_compare_models_evaluates_correct_costs(self):
-        with patch.object(_m, "call_openai") as mock_openai, \
-             patch.object(_m, "call_gemini") as mock_gemini:
+        with patch.object(_m, "call_gemini") as mock_gemini:
              
-            # Setup mock returns
-            mock_openai.side_effect = [
-                ("GPT-4o Response", 0.5, {"input_tokens": 10, "output_tokens": 20}),       # 1st call: gpt-4o
-                ("GPT-4o-Mini Response", 0.3, {"input_tokens": 10, "output_tokens": 20}),  # 2nd call: gpt-4o-mini
+            # Setup mock returns: 1st call for gemini-2.5-flash, 2nd call for gemini-2.5-pro
+            mock_gemini.side_effect = [
+                ("Gemini Flash Response", 0.4, {"input_tokens": 10, "output_tokens": 20}),
+                ("Gemini Pro Response", 0.8, {"input_tokens": 10, "output_tokens": 20}),
             ]
-            mock_gemini.return_value = (
-                "Gemini Response",
-                0.4,
-                {"input_tokens": 10, "output_tokens": 20}
-            )
 
             result = compare_models("Prompt")
 
             # Verify keys exist
-            self.assertIn("gpt4o", result)
-            self.assertIn("gpt4o_mini", result)
             self.assertIn("gemini_flash", result)
+            self.assertIn("gemini_pro", result)
 
-            # Verify exact cost calculations
-            # gpt-4o: (10 * 5.0 + 20 * 20.0) / 1,000,000 = 0.00045
-            self.assertAlmostEqual(result["gpt4o"]["cost"], 0.00045, places=8)
-            
-            # gpt-4o-mini: (10 * 0.150 + 20 * 0.600) / 1,000,000 = 0.0000135
-            self.assertAlmostEqual(result["gpt4o_mini"]["cost"], 0.0000135, places=8)
-            
             # gemini-2.5-flash: (10 * 0.075 + 20 * 0.300) / 1,000,000 = 0.00000675
             self.assertAlmostEqual(result["gemini_flash"]["cost"], 0.00000675, places=8)
+            
+            # gemini-2.5-pro: (10 * 1.25 + 20 * 5.00) / 1,000,000 = 0.0001125
+            self.assertAlmostEqual(result["gemini_pro"]["cost"], 0.0001125, places=8)
 
 
 class TestRetryWithBackoff(unittest.TestCase):
@@ -207,11 +196,10 @@ class TestBatchCompareAndFormat(unittest.TestCase):
 
     def test_batch_runs_and_formats_table(self):
         with patch.object(_m, "compare_models") as mock_comp:
-            def _get_mock():
+            def _get_mock(*args, **kwargs):
                 return {
-                    "gpt4o": {"response": "GPT-4o response content here", "latency": 0.5, "cost": 0.00045, "input_tokens": 10, "output_tokens": 20},
-                    "gpt4o_mini": {"response": "GPT-4o-Mini response content here", "latency": 0.3, "cost": 0.0000135, "input_tokens": 10, "output_tokens": 20},
-                    "gemini_flash": {"response": "Gemini response content here", "latency": 0.4, "cost": 0.00000675, "input_tokens": 10, "output_tokens": 20}
+                    "gemini_flash": {"response": "Gemini Flash response content here", "latency": 0.4, "cost": 0.00000675, "input_tokens": 10, "output_tokens": 20},
+                    "gemini_pro": {"response": "Gemini Pro response content here", "latency": 0.8, "cost": 0.0001125, "input_tokens": 10, "output_tokens": 20}
                 }
             mock_comp.side_effect = _get_mock
 
@@ -222,8 +210,8 @@ class TestBatchCompareAndFormat(unittest.TestCase):
             table = format_comparison_table(results)
             self.assertIsInstance(table, str)
             self.assertIn("Prompt", table)
-            self.assertIn("GPT-4o", table)
             self.assertIn("Gemini-Flash", table)
+            self.assertIn("Gemini-Pro", table)
             self.assertIn("Q1", table)
 
 
